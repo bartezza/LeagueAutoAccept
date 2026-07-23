@@ -1,21 +1,46 @@
 ﻿﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 
 namespace Leauge_Auto_Accept
 {
     internal class Settings
     {
-        public static string[] currentChamp = { "Unselected", "0" };
-        public static string[] currentChampRunes = { "Unselected", "0" };
-        public static string[] currentBackupChamp = { "Unselected", "0" };
-        public static string[] currentBackupChampRunes = { "Unselected", "0" };
-        public static string[] secondaryChamp = { "Unselected", "0" };
-        public static string[] secondaryChampRunes = { "Unselected", "0" };
-        public static string[] secondaryBackupChamp = { "Unselected", "0" };
-        public static string[] secondaryBackupChampRunes = { "Unselected", "0" };
-        public static string[] currentBan = { "Unselected", "0" };
+        // Per-role champion configuration. Keyed by the LCU position strings, which match both
+        // MyTeam.AssignedPosition (champ select) and LocalMember.FirstPositionPreference (lobby).
+        public class RoleConfig
+        {
+            public string[] champ = { "Unselected", "0" };
+            public string[] champRunes = { "Unselected", "0" };
+            public string[] backupChamp = { "Unselected", "0" };
+            public string[] backupChampRunes = { "Unselected", "0" };
+            public string[] ban = { "Unselected", "0" };
+        }
+
+        // Order is also the display order (Top, Jungle, Mid, Bottom, Support).
+        public static readonly string[] RoleKeys = { "top", "jungle", "middle", "bottom", "utility" };
+        public static readonly string[] RoleDisplayNames = { "Top", "Jungle", "Mid", "Bottom", "Support" };
+
+        public static Dictionary<string, RoleConfig> roles = new Dictionary<string, RoleConfig>
+        {
+            ["top"] = new RoleConfig(),
+            ["jungle"] = new RoleConfig(),
+            ["middle"] = new RoleConfig(),
+            ["bottom"] = new RoleConfig(),
+            ["utility"] = new RoleConfig(),
+        };
+
+        public static bool AnyRolePickConfigured() =>
+            roles.Values.Any(r => r.champ[1] != "0" || r.backupChamp[1] != "0");
+
+        public static bool AnyRoleBanConfigured() =>
+            roles.Values.Any(r => r.ban[1] != "0");
+
+        public static int ConfiguredRoleCount() =>
+            roles.Values.Count(r => r.champ[1] != "0");
+
         public static string[] currentSpell1 = { "Unselected", "0" };
         public static string[] currentSpell2 = { "Unselected", "0" };
         public static bool bravery = false;
@@ -242,48 +267,52 @@ namespace Leauge_Auto_Accept
                     name = champsFiltered[Navigation.currentPos].name;
                     id = champsFiltered[Navigation.currentPos].id;
                 }
-                switch (UI.currentChampPicker)
+                // Editing a per-role slot (champion / backup / ban).
+                if (!string.IsNullOrEmpty(UI.currentRole) && roles.ContainsKey(UI.currentRole))
                 {
-                    case 0:
-                        currentChamp[0] = name;
-                        currentChamp[1] = id;
-                        break;
-                    case 1:
-                        currentBackupChamp[0] = name;
-                        currentBackupChamp[1] = id;
-                        break;
-                    case 2:
-                        secondaryChamp[0] = name;
-                        secondaryChamp[1] = id;
-                        break;
-                    case 3:
-                        secondaryBackupChamp[0] = name;
-                        secondaryBackupChamp[1] = id;
-                        break;
-                    case 4:
-                        currentBan[0] = name;
-                        currentBan[1] = id;
-                        break;
-                    case 5:
-                        crowdFavouraiteChamp1[0] = name;
-                        crowdFavouraiteChamp1[1] = id;
-                        break;
-                    case 6:
-                        crowdFavouraiteChamp2[0] = name;
-                        crowdFavouraiteChamp2[1] = id;
-                        break;                        
-                    case 7:
-                        crowdFavouraiteChamp3[0] = name;
-                        crowdFavouraiteChamp3[1] = id;
-                        break;
-                    case 8:
-                        crowdFavouraiteChamp4[0] = name;
-                        crowdFavouraiteChamp4[1] = id;
-                        break;
-                    case 9:
-                        crowdFavouraiteChamp5[0] = name;
-                        crowdFavouraiteChamp5[1] = id;
-                        break;
+                    RoleConfig rc = roles[UI.currentRole];
+                    switch (UI.currentChampPicker)
+                    {
+                        case 0:
+                            rc.champ[0] = name;
+                            rc.champ[1] = id;
+                            break;
+                        case 1:
+                            rc.backupChamp[0] = name;
+                            rc.backupChamp[1] = id;
+                            break;
+                        case 4:
+                            rc.ban[0] = name;
+                            rc.ban[1] = id;
+                            break;
+                    }
+                }
+                else
+                {
+                    // Arena crowd-favourite slots (not tied to a role).
+                    switch (UI.currentChampPicker)
+                    {
+                        case 5:
+                            crowdFavouraiteChamp1[0] = name;
+                            crowdFavouraiteChamp1[1] = id;
+                            break;
+                        case 6:
+                            crowdFavouraiteChamp2[0] = name;
+                            crowdFavouraiteChamp2[1] = id;
+                            break;
+                        case 7:
+                            crowdFavouraiteChamp3[0] = name;
+                            crowdFavouraiteChamp3[1] = id;
+                            break;
+                        case 8:
+                            crowdFavouraiteChamp4[0] = name;
+                            crowdFavouraiteChamp4[1] = id;
+                            break;
+                        case 9:
+                            crowdFavouraiteChamp5[0] = name;
+                            crowdFavouraiteChamp5[1] = id;
+                            break;
+                    }
                 }
 
                 if (saveSettings)
@@ -369,24 +398,20 @@ namespace Leauge_Auto_Accept
                     id = runesFiltered[Navigation.currentPos].id;
                 }
 
-                switch (UI.currentChampPicker)
+                if (!string.IsNullOrEmpty(UI.currentRole) && roles.ContainsKey(UI.currentRole))
                 {
-                    case 0:
-                        currentChampRunes[0] = name;
-                        currentChampRunes[1] = id;
-                        break;
-                    case 1:
-                        currentBackupChampRunes[0] = name;
-                        currentBackupChampRunes[1] = id;
-                        break;
-                    case 2:
-                        secondaryChampRunes[0] = name;
-                        secondaryChampRunes[1] = id;
-                        break;
-                    case 3:
-                        secondaryBackupChampRunes[0] = name;
-                        secondaryBackupChampRunes[1] = id;
-                        break;
+                    RoleConfig rc = roles[UI.currentRole];
+                    switch (UI.currentChampPicker)
+                    {
+                        case 0:
+                            rc.champRunes[0] = name;
+                            rc.champRunes[1] = id;
+                            break;
+                        case 1:
+                            rc.backupChampRunes[0] = name;
+                            rc.backupChampRunes[1] = id;
+                            break;
+                    }
                 }
 
                 if (saveSettings)
@@ -457,24 +482,28 @@ namespace Leauge_Auto_Accept
 
         public static void settingsSave()
         {
-            string config =
-                "champName:" + currentChamp[0] +
-                ",champId:" + currentChamp[1] +
-                ",champRuneName:" + currentChampRunes[0] +
-                ",champRuneId:" + currentChampRunes[1] +
-                ",champBackupName:" + currentBackupChamp[0] +
-                ",champBackupId:" + currentBackupChamp[1] +
-                ",champBackupRuneName:" + currentBackupChampRunes[0] +
-                ",champBackupRuneId:" + currentBackupChampRunes[1] +
-                ",secondaryChampName:" + secondaryChamp[0] + 
-                ",secondaryChampId:" + secondaryChamp[1] +
-                ",secondaryChampRuneName:" + secondaryChampRunes[0] +
-                ",secondaryChampRuneId:" + secondaryChampRunes[1] +
-                ",secondaryBackupChampName:" + secondaryBackupChamp[0] +
-                ",secondaryBackupChampId:" + secondaryBackupChamp[1] +
-                ",secondaryBackupChampRuneName:" + secondaryBackupChampRunes[0] +
-                ",secondaryBackupChampRuneId:" + secondaryBackupChampRunes[1] +
-                ",arenaBravery:" + bravery +
+            StringBuilder configBuilder = new StringBuilder();
+
+            // Per-role champion/backup/ban + rune pages.
+            foreach (var key in RoleKeys)
+            {
+                RoleConfig rc = roles[key];
+                string p = "role_" + key + "_";
+                configBuilder
+                    .Append(p).Append("champName:").Append(rc.champ[0]).Append(',')
+                    .Append(p).Append("champId:").Append(rc.champ[1]).Append(',')
+                    .Append(p).Append("champRuneName:").Append(rc.champRunes[0]).Append(',')
+                    .Append(p).Append("champRuneId:").Append(rc.champRunes[1]).Append(',')
+                    .Append(p).Append("backupName:").Append(rc.backupChamp[0]).Append(',')
+                    .Append(p).Append("backupId:").Append(rc.backupChamp[1]).Append(',')
+                    .Append(p).Append("backupRuneName:").Append(rc.backupChampRunes[0]).Append(',')
+                    .Append(p).Append("backupRuneId:").Append(rc.backupChampRunes[1]).Append(',')
+                    .Append(p).Append("banName:").Append(rc.ban[0]).Append(',')
+                    .Append(p).Append("banId:").Append(rc.ban[1]).Append(',');
+            }
+
+            configBuilder.Append(
+                "arenaBravery:" + bravery +
                 ",banCrowdFavourite:" + banCrowdFavourite +
                 ",arenaCrowdFavourite1Name:" + crowdFavouraiteChamp1[0] +
                 ",arenaCrowdFavourite1ChampId:" + crowdFavouraiteChamp1[1] +
@@ -486,8 +515,6 @@ namespace Leauge_Auto_Accept
                 ",arenaCrowdFavourite4ChampId:" + crowdFavouraiteChamp4[1] +
                 ",arenaCrowdFavourite5Name:" + crowdFavouraiteChamp5[0] +
                 ",arenaCrowdFavourite5ChampId:" + crowdFavouraiteChamp5[1] +
-                ",banName:" + currentBan[0] +
-                ",banId:" + currentBan[1] +
                 ",spell1Name:" + currentSpell1[0] +
                 ",spell1Id:" + currentSpell1[1] +
                 ",spell2Name:" + currentSpell2[0] +
@@ -509,7 +536,9 @@ namespace Leauge_Auto_Accept
                 ",autoRestartQueue:" + autoRestartQueue +
                 ",cancelQueueAfterDodge:" + cancelQueueAfterDodge +
                 ",disableUpdateCheck:" + disableUpdateCheck +
-                ",chatMessages:" + encodeMessagesIntoBase64();
+                ",chatMessages:" + encodeMessagesIntoBase64());
+
+            string config = configBuilder.ToString();
 
             string dirParameter = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + @"\Leauge Auto Accept Config.txt";
             using (StreamWriter m_WriterParameter = new StreamWriter(dirParameter, false))
@@ -560,6 +589,32 @@ namespace Leauge_Auto_Accept
             File.Delete(dirParameter);
         }
 
+        private static void applyRoleSetting(string key, string value)
+        {
+            // key format: role_<roleKey>_<field>. Role keys and field names contain no underscores.
+            string[] parts = key.Split('_');
+            if (parts.Length < 3) return;
+
+            string roleKey = parts[1];
+            string field = parts[2];
+            if (!roles.ContainsKey(roleKey)) return;
+
+            RoleConfig rc = roles[roleKey];
+            switch (field)
+            {
+                case "champName": rc.champ[0] = value; break;
+                case "champId": rc.champ[1] = value; break;
+                case "champRuneName": rc.champRunes[0] = value; break;
+                case "champRuneId": rc.champRunes[1] = value; break;
+                case "backupName": rc.backupChamp[0] = value; break;
+                case "backupId": rc.backupChamp[1] = value; break;
+                case "backupRuneName": rc.backupChampRunes[0] = value; break;
+                case "backupRuneId": rc.backupChampRunes[1] = value; break;
+                case "banName": rc.ban[0] = value; break;
+                case "banId": rc.ban[1] = value; break;
+            }
+        }
+
         public static void loadSettings()
         {
             string dirParameter = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + @"\Leauge Auto Accept Config.txt";
@@ -570,56 +625,17 @@ namespace Leauge_Auto_Accept
                 foreach (var comma in commas)
                 {
                     string[] columns = comma.Split(':');
+
+                    // Per-role keys (role_<role>_<field>). Old primary/secondary/ban keys from
+                    // pre-per-role configs have no matching case here and are simply ignored.
+                    if (columns[0].StartsWith("role_"))
+                    {
+                        applyRoleSetting(columns[0], columns.Length > 1 ? columns[1] : "");
+                        continue;
+                    }
+
                     switch (columns[0])
                     {
-                        case "champName":
-                            currentChamp[0] = columns[1];
-                            break;
-                        case "champId":
-                            currentChamp[1] = columns[1];
-                            break;
-                        case "champRuneName":
-                            currentChampRunes[0] = columns[1];
-                            break;
-                        case "champRuneId":
-                            currentChampRunes[1] = columns[1];
-                            break;
-                        case "champBackupName":
-                            currentBackupChamp[0] = columns[1];
-                            break;
-                        case "champBackupId":
-                            currentBackupChamp[1] = columns[1];
-                            break;
-                        case "champBackupRuneName":
-                            currentBackupChampRunes[0] = columns[1];
-                            break;
-                        case "champBackupRuneId":
-                            currentBackupChampRunes[1] = columns[1];
-                            break;
-                        case "secondaryChampName":
-                            secondaryChamp[0] = columns[1];
-                            break;   
-                        case "secondaryChampId":
-                            secondaryChamp[1] = columns[1];
-                            break;
-                        case "secondaryChampRuneName":
-                            secondaryChampRunes[0] = columns[1];
-                            break;
-                        case "secondaryChampRuneId":
-                            secondaryChampRunes[1] = columns[1];
-                            break;
-                        case "secondaryBackupChampName":
-                            secondaryBackupChamp[0] = columns[1];
-                            break;
-                        case "secondaryBackupChampId":
-                            secondaryBackupChamp[1] = columns[1];
-                            break;
-                        case "secondaryBackupChampRuneName":
-                            secondaryBackupChampRunes[0] = columns[1];
-                            break;
-                        case "secondaryBackupChampRuneId":
-                            secondaryBackupChampRunes[1] = columns[1];
-                            break;
                         case "arenaBravery":
                             bravery = Boolean.Parse(columns[1]);
                             break;
@@ -655,12 +671,6 @@ namespace Leauge_Auto_Accept
                             break;
                         case "arenaCrowdFavourite5ChampId":
                             crowdFavouraiteChamp5[1] = columns[1];
-                            break;
-                        case "banName":
-                            currentBan[0] = columns[1];
-                            break;
-                        case "banId":
-                            currentBan[1] = columns[1];
                             break;
                         case "spell1Name":
                             currentSpell1[0] = columns[1];

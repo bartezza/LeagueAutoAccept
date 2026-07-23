@@ -262,6 +262,34 @@ namespace Leauge_Auto_Accept
                 case "mainScreen":
                     UI.exitMenu();
                     break;
+                case "rolesMenu":
+                    UI.mainScreen();
+                    break;
+                case "roleMenu":
+                    UI.rolesMenu();
+                    break;
+                case "champSelector":
+                case "spellSelector":
+                case "runeSelector":
+                    if (currentInput == "Lochel" && UI.windowType == "grid")
+                    {
+                        currentInput = "";
+                    }
+                    if (UI.previousWindow == "roleMenu")
+                    {
+                        UI.previousWindow = "";
+                        UI.roleMenu();
+                    }
+                    else if (UI.previousWindow == "arenaMenu")
+                    {
+                        UI.previousWindow = "";
+                        UI.arenaMenu();
+                    }
+                    else
+                    {
+                        UI.mainScreen();
+                    }
+                    break;
                 case "exitMenu":
                     if (LCU.isLeagueOpen)
                     {
@@ -297,6 +325,12 @@ namespace Leauge_Auto_Accept
             {
                 case "mainScreen":
                     mainMenuNav();
+                    break;
+                case "rolesMenu":
+                    rolesMenuNav();
+                    break;
+                case "roleMenu":
+                    roleMenuNav();
                     break;
                 case "arenaMenu":
                     arenaMenuNav();
@@ -340,6 +374,11 @@ namespace Leauge_Auto_Accept
                         {
                             UI.previousWindow = "";
                             UI.arenaMenu();
+                        }
+                        else if (UI.previousWindow == "roleMenu")
+                        {
+                            UI.previousWindow = "";
+                            UI.roleMenu();
                         }
                         else
                         {
@@ -611,70 +650,81 @@ namespace Leauge_Auto_Accept
             switch (currentPos)
             {
                 case 0:
-                    UI.currentChampPicker = 0;
-                    UI.champSelector();
+                    UI.rolesMenu();
                     break;
                 case 1:
-                    UI.currentChampPicker = 0;
-                    UI.runeSelector();
-                    break;
-                case 2:
-                    UI.currentChampPicker = 1;
-                    UI.champSelector();
-                    break;
-                case 3:
-                    UI.currentChampPicker = 1;
-                    UI.runeSelector();
-                    break;
-                case 4:
-                    UI.currentChampPicker = 2;
-                    UI.champSelector();
-                    break;
-                case 5:
-                    UI.currentChampPicker = 2;
-                    UI.runeSelector();
-                    break;
-                case 6:
-                    UI.currentChampPicker = 3;
-                    UI.champSelector();
-                    break;
-                case 7:
-                    UI.currentChampPicker = 3;
-                    UI.runeSelector();
-                    break;
-                case 8:
-                    UI.currentChampPicker = 4;
-                    UI.champSelector();
-                    break;
-                case 9:
+                    UI.currentRole = "";
+                    UI.previousWindow = "mainScreen";
                     UI.currentSpellSlot = 0;
                     UI.spellSelector();
                     break;
-                case 10:
+                case 2:
+                    UI.currentRole = "";
+                    UI.previousWindow = "mainScreen";
                     UI.currentSpellSlot = 1;
                     UI.spellSelector();
                     break;
-                case 11:
+                case 3:
                     UI.chatMessagesWindow();
                     break;
-                case 12:
+                case 4:
                     Settings.toggleAutoAcceptSetting();
                     UI.toggleAutoAcceptSettingUI(currentPos);
                     break;
-                case 13:
+                case 5:
                     UI.settingsMenu();
                     break;
-                case 14:
+                case 6:
                     UI.arenaMenu();
                     break;
-                case 15:
+                case 7:
                     UI.infoMenu();
+                    break;
+            }
+        }
+
+        private static void rolesMenuNav()
+        {
+            if (currentPos >= 0 && currentPos < Settings.RoleKeys.Length)
+            {
+                UI.currentRole = Settings.RoleKeys[currentPos];
+                UI.roleMenu();
+            }
+        }
+
+        private static void roleMenuNav()
+        {
+            // currentRole was set when entering this menu from rolesMenu.
+            UI.previousWindow = "roleMenu";
+            switch (currentPos)
+            {
+                case 0: // Champion
+                    UI.currentChampPicker = 0;
+                    UI.champSelector();
+                    break;
+                case 1: // Champion rune page
+                    UI.currentChampPicker = 0;
+                    UI.runeSelector();
+                    break;
+                case 2: // Backup champion
+                    UI.currentChampPicker = 1;
+                    UI.champSelector();
+                    break;
+                case 3: // Backup rune page
+                    UI.currentChampPicker = 1;
+                    UI.runeSelector();
+                    break;
+                case 4: // Ban
+                    UI.currentChampPicker = 4;
+                    UI.champSelector();
                     break;
             }
         }
 
         private static void arenaMenuNav()
         {
+            // Arena crowd-favourite pickers are not tied to a role.
+            UI.currentRole = "";
             switch (currentPos)
             {
                 case 0:

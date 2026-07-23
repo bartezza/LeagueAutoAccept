@@ -10,6 +10,9 @@ namespace Leauge_Auto_Accept
         public static int currentChampPicker = 0;
         public static int currentSpellSlot = 0;
 
+        // The role currently being edited (one of Settings.RoleKeys), or "" when not in a role menu.
+        public static string currentRole = "";
+
         public static int totalChamps = 0;
         public static int totalRunes = 0;
         public static int totalSpells = 0;
@@ -116,6 +119,12 @@ namespace Leauge_Auto_Accept
                 case "mainScreen":
                     mainScreen();
                     break;
+                case "rolesMenu":
+                    rolesMenu();
+                    break;
+                case "roleMenu":
+                    roleMenu();
+                    break;
                 case "settingsMenu":
                     settingsMenu();
                     break;
@@ -184,30 +193,14 @@ namespace Leauge_Auto_Accept
 
             // Define options
             string[] optionName = {
-                "Select primary champion",
-                " Rune page",
-                "Primary backup champion",
-                " Rune page",
-                "Select secondary champion",
-                " Rune page",
-                "Secondary backup champion",
-                " Rune page",
-                "Select a ban",
+                "Champions per role",
                 "Select summoner spell 1",
                 "Select summoner spell 2",
                 "Instant chat messages",
                 "Enable auto accept"
             };
             string[] optionValue = {
-                Settings.currentChamp[0],
-                Settings.currentChampRunes[0],
-                Settings.currentBackupChamp[0],
-                Settings.currentBackupChampRunes[0],
-                Settings.secondaryChamp[0],
-                Settings.secondaryChampRunes[0],
-                Settings.secondaryBackupChamp[0],
-                Settings.secondaryBackupChampRunes[0],
-                Settings.currentBan[0],
+                Settings.ConfiguredRoleCount() + "/" + Settings.RoleKeys.Length + " set",
                 Settings.currentSpell1[0],
                 Settings.currentSpell2[0],
                 Settings.chatMessagesEnabled ? "Enabled, " + Settings.chatMessages.Count : "Disabled",
@@ -238,6 +231,82 @@ namespace Leauge_Auto_Accept
         public static void toggleAutoAcceptSettingUI(int pos)
         {
             Print.printWhenPossible(MainLogic.isAutoAcceptOn ? ". Enabled" : " Disabled", topPad + pos, leftPad + 38);
+        }
+
+        public static void rolesMenu()
+        {
+            Print.canMovePos = false;
+            Navigation.currentPos = 0;
+            Navigation.consolePosLast = 0;
+
+            currentWindow = "rolesMenu";
+            windowType = "normal";
+            showCursor = false;
+            topPad = SizeHandler.HeightCenter - 3;
+            leftPad = SizeHandler.WidthCenter - 25;
+            maxPos = Settings.RoleKeys.Length;
+
+            Console.Clear();
+
+            Print.printCentered("Champions per role", topPad - 2);
+
+            for (int i = 0; i < Settings.RoleKeys.Length; i++)
+            {
+                Settings.RoleConfig rc = Settings.roles[Settings.RoleKeys[i]];
+                Print.printCentered(addDotsInBetween(Settings.RoleDisplayNames[i], rc.champ[0]), topPad + i);
+            }
+
+            Navigation.handlePointerMovementPrint();
+
+            Print.canMovePos = true;
+        }
+
+        public static void roleMenu()
+        {
+            Print.canMovePos = false;
+            Navigation.currentPos = 0;
+            Navigation.consolePosLast = 0;
+
+            currentWindow = "roleMenu";
+            windowType = "normal";
+            showCursor = false;
+            topPad = SizeHandler.HeightCenter - 3;
+            leftPad = SizeHandler.WidthCenter - 25;
+            maxPos = 5;
+
+            Console.Clear();
+
+            int idx = Array.IndexOf(Settings.RoleKeys, currentRole);
+            string roleName = idx >= 0 ? Settings.RoleDisplayNames[idx] : "Role";
+            Settings.RoleConfig rc = Settings.roles.ContainsKey(currentRole)
+                ? Settings.roles[currentRole]
+                : new Settings.RoleConfig();
+
+            Print.printCentered(roleName + " setup", topPad - 2);
+
+            string[] optionName = {
+                "Champion",
+                " Rune page",
+                "Backup champion",
+                " Rune page",
+                "Ban"
+            };
+            string[] optionValue = {
+                rc.champ[0],
+                rc.champRunes[0],
+                rc.backupChamp[0],
+                rc.backupChampRunes[0],
+                rc.ban[0]
+            };
+
+            for (int i = 0; i < optionName.Length; i++)
+            {
+                Print.printCentered(addDotsInBetween(optionName[i], optionValue[i]), topPad + i);
+            }
+
+            Navigation.handlePointerMovementPrint();
+
+            Print.canMovePos = true;
         }
 
         public static void arenaMenu()
