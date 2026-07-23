@@ -10,13 +10,24 @@ namespace Leauge_Auto_Accept
     {
         // Per-role champion configuration. Keyed by the LCU position strings, which match both
         // MyTeam.AssignedPosition (champ select) and LocalMember.FirstPositionPreference (lobby).
+        // Number of ban slots per role (tried in order during the ban phase).
+        public const int BanSlots = 3;
+
         public class RoleConfig
         {
             public string[] champ = { "Unselected", "0" };
             public string[] champRunes = { "Unselected", "0" };
             public string[] backupChamp = { "Unselected", "0" };
             public string[] backupChampRunes = { "Unselected", "0" };
-            public string[] ban = { "Unselected", "0" };
+
+            // Ordered ban preferences. The app bans the first entry that isn't already
+            // banned or hovered/picked by a party member.
+            public string[][] bans =
+            {
+                new[] { "Unselected", "0" },
+                new[] { "Unselected", "0" },
+                new[] { "Unselected", "0" },
+            };
         }
 
         // Order is also the display order (Top, Jungle, Mid, Bottom, Support).
@@ -36,7 +47,7 @@ namespace Leauge_Auto_Accept
             roles.Values.Any(r => r.champ[1] != "0" || r.backupChamp[1] != "0");
 
         public static bool AnyRoleBanConfigured() =>
-            roles.Values.Any(r => r.ban[1] != "0");
+            roles.Values.Any(r => r.bans.Any(b => b[1] != "0"));
 
         public static int ConfiguredRoleCount() =>
             roles.Values.Count(r => r.champ[1] != "0");
@@ -282,8 +293,11 @@ namespace Leauge_Auto_Accept
                             rc.backupChamp[1] = id;
                             break;
                         case 4:
-                            rc.ban[0] = name;
-                            rc.ban[1] = id;
+                            if (UI.currentBanSlot >= 0 && UI.currentBanSlot < BanSlots)
+                            {
+                                rc.bans[UI.currentBanSlot][0] = name;
+                                rc.bans[UI.currentBanSlot][1] = id;
+                            }
                             break;
                     }
                 }
@@ -497,9 +511,14 @@ namespace Leauge_Auto_Accept
                     .Append(p).Append("backupName:").Append(rc.backupChamp[0]).Append(',')
                     .Append(p).Append("backupId:").Append(rc.backupChamp[1]).Append(',')
                     .Append(p).Append("backupRuneName:").Append(rc.backupChampRunes[0]).Append(',')
-                    .Append(p).Append("backupRuneId:").Append(rc.backupChampRunes[1]).Append(',')
-                    .Append(p).Append("banName:").Append(rc.ban[0]).Append(',')
-                    .Append(p).Append("banId:").Append(rc.ban[1]).Append(',');
+                    .Append(p).Append("backupRuneId:").Append(rc.backupChampRunes[1]).Append(',');
+                for (int b = 0; b < BanSlots; b++)
+                {
+                    int n = b + 1;
+                    configBuilder
+                        .Append(p).Append("ban").Append(n).Append("Name:").Append(rc.bans[b][0]).Append(',')
+                        .Append(p).Append("ban").Append(n).Append("Id:").Append(rc.bans[b][1]).Append(',');
+                }
             }
 
             configBuilder.Append(
@@ -610,8 +629,16 @@ namespace Leauge_Auto_Accept
                 case "backupId": rc.backupChamp[1] = value; break;
                 case "backupRuneName": rc.backupChampRunes[0] = value; break;
                 case "backupRuneId": rc.backupChampRunes[1] = value; break;
-                case "banName": rc.ban[0] = value; break;
-                case "banId": rc.ban[1] = value; break;
+                // Legacy single-ban keys map to the first slot.
+                case "banName": rc.bans[0][0] = value; break;
+                case "banId": rc.bans[0][1] = value; break;
+                // ban1Name/ban1Id ... ban3Name/ban3Id
+                case "ban1Name": rc.bans[0][0] = value; break;
+                case "ban1Id": rc.bans[0][1] = value; break;
+                case "ban2Name": rc.bans[1][0] = value; break;
+                case "ban2Id": rc.bans[1][1] = value; break;
+                case "ban3Name": rc.bans[2][0] = value; break;
+                case "ban3Id": rc.bans[2][1] = value; break;
             }
         }
 

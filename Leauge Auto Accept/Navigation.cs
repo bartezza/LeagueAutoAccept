@@ -714,8 +714,11 @@ namespace Leauge_Auto_Accept
                     UI.currentChampPicker = 1;
                     UI.runeSelector();
                     break;
-                case 4: // Ban
+                case 4: // Ban 1
+                case 5: // Ban 2
+                case 6: // Ban 3
                     UI.currentChampPicker = 4;
+                    UI.currentBanSlot = currentPos - 4;
                     UI.champSelector();
                     break;
             }

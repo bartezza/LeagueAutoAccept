@@ -13,6 +13,9 @@ namespace Leauge_Auto_Accept
         // The role currently being edited (one of Settings.RoleKeys), or "" when not in a role menu.
         public static string currentRole = "";
 
+        // Which ban slot (0..BanSlots-1) is being edited when the ban picker is open.
+        public static int currentBanSlot = 0;
+
         public static int totalChamps = 0;
         public static int totalRunes = 0;
         public static int totalSpells = 0;
@@ -270,9 +273,9 @@ namespace Leauge_Auto_Accept
             currentWindow = "roleMenu";
             windowType = "normal";
             showCursor = false;
-            topPad = SizeHandler.HeightCenter - 3;
+            topPad = SizeHandler.HeightCenter - 4;
             leftPad = SizeHandler.WidthCenter - 25;
-            maxPos = 5;
+            maxPos = 4 + Settings.BanSlots;
 
             Console.Clear();
 
@@ -289,14 +292,18 @@ namespace Leauge_Auto_Accept
                 " Rune page",
                 "Backup champion",
                 " Rune page",
-                "Ban"
+                "Ban 1",
+                "Ban 2",
+                "Ban 3"
             };
             string[] optionValue = {
                 rc.champ[0],
                 rc.champRunes[0],
                 rc.backupChamp[0],
                 rc.backupChampRunes[0],
-                rc.ban[0]
+                rc.bans[0][0],
+                rc.bans[1][0],
+                rc.bans[2][0]
             };
 
             for (int i = 0; i < optionName.Length; i++)

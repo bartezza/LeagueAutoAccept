@@ -555,31 +555,137 @@ namespace Leauge_Auto_Accept
             // make sure it's my turn to pick and that it is not the planning phase anymore
             if (ActIsInProgress == true && champSelectPhase != "PLANNING")
             {
+                // Pick the first configured ban that isn't already banned or pre-selected by a
+                // party member. Re-evaluated every pass so we adapt if our current hover becomes
+                // unavailable (e.g. someone bans it or a teammate hovers it).
+                string chosenBanIdStr = ChooseBanId(currentChampSelect, roleConfig, currentChampSelect.LocalPlayerCellId);
+                bool dontBanCrowd = isArena && Settings.banCrowdFavourite && isInCrowdFavoriteChamps(chosenBanIdStr);
+                int chosenBanId = ParseId(dontBanCrowd ? "0" : chosenBanIdStr);
 
-                if (!pickedBan)
+                // Hover the chosen ban (skip if we're already hovering exactly that champion).
+                if (!pickedBan || championId != chosenBanId)
                 {
-                    // Hover champion when champ select starts
                     long currentTime = DateTimeOffset.Now.ToUnixTimeMilliseconds();
 
                     if (currentTime - Settings.banStartHoverDelay > champSelectStart) // Check if enough time has passed since planning phase has started
                     {
-                        // Ban none if the setting is disabled.
-                        bool dontBanCrowd = isArena && Settings.banCrowdFavourite && isInCrowdFavoriteChamps(roleConfig.ban[1]);
-                        hoverChampion(actId, ParseId(dontBanCrowd ? "0" : roleConfig.ban[1]), "ban");
+                        hoverChampion(actId, chosenBanId, "ban");
                     }
                 }
 
                 if (!lockedBan)
                 {
-                    // Check the instaBan setting
+                    // lockChampion sends the championId, so we always lock the chosen ban.
                     if (!Settings.instaBan)
                     {
-                        checkLockDelay(actId, championId, currentChampSelect, "ban");
+                        checkLockDelay(actId, chosenBanId, currentChampSelect, "ban");
                     }
                     else
                     {
-                        lockChampion(actId, championId, "ban");
+                        lockChampion(actId, chosenBanId, "ban");
                     }
+                }
+
+                // Once the ban is locked it is also considered selected (reaches the "done" state).
+                if (lockedBan)
+                {
+                    pickedBan = true;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Choose the first ban slot (in order) that is still available: not already banned by
+        /// anyone and not hovered/locked by a party member. Returns "-1" for an explicit "None"
+        /// slot, or "0" (ban nothing) when no configured ban is available.
+        /// </summary>
+        private static string ChooseBanId(LCUTypes.LolChampSelectSessionV1 session, Settings.RoleConfig roleConfig, int localCellId)
+        {
+            System.Collections.Generic.HashSet<int> unavailable = GetUnavailableBanChampionIds(session, localCellId);
+
+            foreach (var slot in roleConfig.bans)
+            {
+                string id = slot[1];
+                if (id == "0") continue;      // empty slot
+                if (id == "-1") return "-1";  // explicit "None": stop here and ban nothing
+                if (int.TryParse(id, out int cid) && unavailable.Contains(cid)) continue; // taken/hovered
+                return id;                    // first available ban
+            }
+
+            return "0"; // nothing left to ban
+        }
+
+        /// <summary>
+        /// Champions that should not be banned: already-banned champions (either team) plus
+        /// champions a party member has hovered as a pick, locked, or is currently hovering to ban.
+        /// </summary>
+        private static System.Collections.Generic.HashSet<int> GetUnavailableBanChampionIds(LCUTypes.LolChampSelectSessionV1 session, int localCellId)
+        {
+            var set = new System.Collections.Generic.HashSet<int>();
+
+            // Already-banned champions (both teams).
+            if (session.Bans != null)
+            {
+                AddChampionIds(set, session.Bans.MyTeamBans);
+                AddChampionIds(set, session.Bans.TheirTeamBans);
+            }
+
+            // Party members (my team, excluding me): their intended picks and locked champions.
+            if (session.MyTeam != null)
+            {
+                foreach (var member in session.MyTeam)
+                {
+                    if (member.CellId == localCellId) continue;
+                    if (member.ChampionPickIntent > 0) set.Add(member.ChampionPickIntent);
+                    if (member.ChampionId > 0) set.Add(member.ChampionId);
+                }
+            }
+
+            // Ban actions: completed bans (any actor) and in-progress ban hovers by teammates.
+            if (session.Actions != null)
+            {
+                foreach (var act in session.Actions.SelectMany(list => list.AsArray()))
+                {
+                    if (act == null) continue;
+                    if ((string)act["type"] != "ban") continue;
+
+                    int champId = (int?)act["championId"] ?? 0;
+                    if (champId <= 0) continue;
+
+                    bool completed = (bool?)act["completed"] ?? false;
+                    bool inProgress = (bool?)act["isInProgress"] ?? false;
+                    int actorCell = (int?)act["actorCellId"] ?? -1;
+
+                    if (completed)
+                    {
+                        set.Add(champId); // already banned
+                    }
+                    else if (inProgress && actorCell != localCellId && IsOnMyTeam(session, actorCell))
+                    {
+                        set.Add(champId); // a teammate is hovering this ban
+                    }
+                }
+            }
+
+            return set;
+        }
+
+        private static bool IsOnMyTeam(LCUTypes.LolChampSelectSessionV1 session, int cellId) =>
+            session.MyTeam != null && session.MyTeam.Any(m => m.CellId == cellId);
+
+        private static void AddChampionIds(System.Collections.Generic.HashSet<int> set, System.Collections.Generic.IReadOnlyList<object> ids)
+        {
+            if (ids == null) return;
+            foreach (var o in ids)
+            {
+                if (o == null) continue;
+                if (o is JsonElement je)
+                {
+                    if (je.ValueKind == JsonValueKind.Number && je.TryGetInt32(out int v)) set.Add(v);
+                }
+                else if (int.TryParse(o.ToString(), out int v2))
+                {
+                    set.Add(v2);
                 }
             }
         }
