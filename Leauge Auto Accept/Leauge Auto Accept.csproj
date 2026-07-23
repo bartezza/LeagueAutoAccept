@@ -13,7 +13,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Content Include="icon.ico" />
+    <!-- Embedded into the exe via ApplicationIcon; no need to copy it beside the exe. -->
+    <Content Include="icon.ico">
+      <CopyToPublishDirectory>Never</CopyToPublishDirectory>
+    </Content>
     <PackageReference Include="NLog" Version="6.0.4" />
     <PackageReference Include="RestSharp" Version="112.1.0" />
     <PackageReference Include="System.Management" Version="4.7.0" />
@@ -22,6 +25,8 @@
   <ItemGroup>
     <None Update="NLog.config">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <!-- Keep the published exe a single standalone file; NLog runs without it. -->
+      <CopyToPublishDirectory>Never</CopyToPublishDirectory>
     </None>
   </ItemGroup>
 
