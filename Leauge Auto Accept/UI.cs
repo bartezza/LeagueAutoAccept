@@ -194,6 +194,9 @@ namespace Leauge_Auto_Accept
                 Print.printCentered(logo[i], SizeHandler.HeightCenter - 12 + i);
             }
 
+            // Edition note below the title
+            Print.printCentered("~ Enhanced edition ~", SizeHandler.HeightCenter - 4);
+
             // Define options
             string[] optionName = {
                 "Champions per role",
