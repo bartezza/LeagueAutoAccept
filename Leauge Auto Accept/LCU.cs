@@ -30,22 +30,32 @@ namespace Leauge_Auto_Accept
                 Process client = Process.GetProcessesByName("LeagueClientUx").FirstOrDefault();
                 if (client != null)
                 {
-                    isLeagueOpen = true;
                     if (lcuPid != client.Id)
                     {
-                        lcuPid = client.Id;
-
                         //get token and port
-                        leagueAuth = getLeagueAuth(client);
-                        if (leagueAuth == null)
+                        string[] auth = getLeagueAuth(client);
+                        if (auth == null)
                         {
+                            // The client process exists but its auth data could not be read yet.
+                            // This is common right after the client launches (the process appears
+                            // before its command line is queryable) or during a transient WMI hiccup.
+                            // Do NOT commit lcuPid here, otherwise the block above would be skipped
+                            // on every future iteration and we'd stay stuck "not finding" the client
+                            // for this whole session. Leaving lcuPid unchanged makes us retry.
                             isLeagueOpen = false;
                             MainLogic.isAutoAcceptOn = false;
-                            Log.Warn("League client was found, but LCU auth data could not be read.");
-                            UI.leagueClientIsClosedMessage();
+                            Log.Warn("League client was found, but LCU auth data could not be read yet. Will retry.");
+                            if (UI.currentWindow != "leagueClientIsClosedMessage" && UI.currentWindow != "exitMenu")
+                            {
+                                UI.leagueClientIsClosedMessage();
+                            }
                             Thread.Sleep(2000);
                             continue;
                         }
+
+                        // Only commit the PID once we actually have valid auth data.
+                        lcuPid = client.Id;
+                        leagueAuth = auth;
 
                         //reset restclient
                         S_restClient?.Dispose(); S_restClient = null;
@@ -72,6 +82,10 @@ namespace Leauge_Auto_Accept
                             UI.mainScreen();
                         }
                     }
+
+                    // Reached only when the client is present AND auth is valid
+                    // (the auth-failure path above uses 'continue').
+                    isLeagueOpen = true;
                 }
                 else
                 {
@@ -105,36 +119,149 @@ namespace Leauge_Auto_Accept
 
         private static string[] getLeagueAuth(Process client)
         {
-            string query = $"SELECT CommandLine FROM Win32_Process where ProcessId = {client.Id}";
-            string commandLine = string.Empty;
-
-            using (var searcher = new System.Management.ManagementObjectSearcher(query))
-            using (var results = searcher.Get())
+            // Primary source: the LeagueClientUx command line (contains --app-port and
+            // --remoting-auth-token). Read it via WMI.
+            string[] auth = getLeagueAuthFromCommandLine(client);
+            if (auth != null)
             {
-                foreach (var result in results)
-                {
-                    commandLine = result["CommandLine"]?.ToString();
-                    break;
-                }
+                return auth;
             }
 
-            // Parse the port and auth token into variables
-            var portMatch = Regex.Match(commandLine ?? "", @"--app-port=""?(\d+)""?");
-            var authTokenMatch = Regex.Match(commandLine ?? "", @"--remoting-auth-token=([a-zA-Z0-9_-]+)");
-            if (!portMatch.Success || !authTokenMatch.Success)
+            // Fallback source: the LCU "lockfile" that the client writes to its install
+            // directory. This works even when the command line cannot be read - e.g. the
+            // client is running elevated while this app is not, or WMI is momentarily
+            // unavailable right after the client starts.
+            auth = getLeagueAuthFromLockfile(client);
+            if (auth != null)
             {
-                Log.Warn("Failed to parse LCU auth data. portFound={0} tokenFound={1}", portMatch.Success, authTokenMatch.Success);
+                Log.Info("Recovered LCU auth data from the lockfile.");
+                return auth;
+            }
+
+            return null;
+        }
+
+        private static string[] getLeagueAuthFromCommandLine(Process client)
+        {
+            string commandLine = string.Empty;
+
+            try
+            {
+                string query = $"SELECT CommandLine FROM Win32_Process where ProcessId = {client.Id}";
+                using (var searcher = new System.Management.ManagementObjectSearcher(query))
+                using (var results = searcher.Get())
+                {
+                    foreach (var result in results)
+                    {
+                        commandLine = result["CommandLine"]?.ToString();
+                        break;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                // WMI can throw (access denied, provider load failure, etc.). Treat it as
+                // "not available" so the lockfile fallback gets a chance.
+                Log.Warn(ex, "Failed to query the LeagueClientUx command line via WMI.");
                 return null;
             }
 
-            string port = portMatch.Groups[1].Value;
-            string authToken = authTokenMatch.Groups[1].Value;
+            // Parse the port and auth token. Values may be wrapped in quotes, so allow them.
+            var portMatch = Regex.Match(commandLine ?? "", @"--app-port=""?(\d+)""?");
+            var authTokenMatch = Regex.Match(commandLine ?? "", @"--remoting-auth-token=""?([\w-]+)""?");
+            if (!portMatch.Success || !authTokenMatch.Success)
+            {
+                Log.Warn("Failed to parse LCU auth data from command line. portFound={0} tokenFound={1}", portMatch.Success, authTokenMatch.Success);
+                return null;
+            }
 
-            // Compute the encoded key
+            return buildAuth(authTokenMatch.Groups[1].Value, portMatch.Groups[1].Value);
+        }
+
+        private static string[] getLeagueAuthFromLockfile(Process client)
+        {
+            foreach (string dir in getLeagueInstallDirCandidates(client))
+            {
+                if (string.IsNullOrWhiteSpace(dir))
+                {
+                    continue;
+                }
+
+                string lockfilePath = System.IO.Path.Combine(dir, "lockfile");
+                if (!System.IO.File.Exists(lockfilePath))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    string content;
+                    // The client holds the lockfile open, so we must share read/write access.
+                    using (var fs = new System.IO.FileStream(lockfilePath, System.IO.FileMode.Open, System.IO.FileAccess.Read, System.IO.FileShare.ReadWrite))
+                    using (var reader = new System.IO.StreamReader(fs))
+                    {
+                        content = reader.ReadToEnd();
+                    }
+
+                    // Format: <name>:<pid>:<port>:<password>:<protocol>
+                    string[] parts = content.Split(':');
+                    if (parts.Length < 4)
+                    {
+                        continue;
+                    }
+
+                    string port = parts[2];
+                    string token = parts[3];
+                    if (string.IsNullOrWhiteSpace(port) || string.IsNullOrWhiteSpace(token))
+                    {
+                        continue;
+                    }
+
+                    return buildAuth(token, port);
+                }
+                catch (Exception ex)
+                {
+                    Log.Warn(ex, "Failed to read the LCU lockfile at {0}.", lockfilePath);
+                }
+            }
+
+            return null;
+        }
+
+        private static IEnumerable<string> getLeagueInstallDirCandidates(Process client)
+        {
+            // LeagueClientUx.exe and the lockfile live in the install directory, so the
+            // process's own module path is the most reliable source.
+            string moduleDir = null;
+            try
+            {
+                moduleDir = System.IO.Path.GetDirectoryName(client.MainModule?.FileName);
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex, "Could not read the LeagueClientUx module path.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(moduleDir))
+            {
+                yield return moduleDir;
+            }
+
+            // Common default install locations as a last resort.
+            string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            yield return System.IO.Path.Combine(localAppData, "Riot Games", "League of Legends");
+
+            foreach (string root in new[] { @"C:\Riot Games", @"C:\Program Files\Riot Games", @"C:\Program Files (x86)\Riot Games" })
+            {
+                yield return System.IO.Path.Combine(root, "League of Legends");
+            }
+        }
+
+        private static string[] buildAuth(string authToken, string port)
+        {
+            // Compute the encoded Basic auth key: base64("riot:<token>").
             string auth = "riot:" + authToken;
             string authBase64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(auth));
-
-            // Return content
             return new string[] { authBase64, port };
         }
 
