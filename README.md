@@ -1,6 +1,14 @@
 # Automatic queue accepter for League of Legends
 Ever wanted to go pee or grab something but you're already 10 minutes into the queue? LeagueAutoAccept is a C# console app made using the LCU API to automatically accept queue and more!
 
+## Enhanced edition
+This fork adds a few improvements on top of the original:
+- **Per-role setup** – configure a champion, backup champion and bans for each role (Top/Jungle/Mid/Bottom/Support); the one matching your assigned position is used.
+- **Up to 3 bans per role** – bans the first one still available, skipping champions already banned or picked/hovered by a teammate.
+- **Smarter backup pick** – if your champion gets taken (e.g. the enemy picks it), it falls back to your backup automatically.
+- **More reliable client detection** – no longer gets stuck when the client's auth data isn't ready yet.
+- **Single-file build** – ships as one self-contained `.exe` (no .NET runtime needed).
+
 ## Screenshot
 ![LeagueAutoAccept Screenshot](screenshot.png?raw=true)
 
