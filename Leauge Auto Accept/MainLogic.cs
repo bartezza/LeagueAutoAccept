@@ -466,8 +466,14 @@ namespace Leauge_Auto_Accept
 
         private static void handlePickAction(int actId, int championId, bool ActIsInProgress, LCUTypes.LolChampSelectSessionV1 currentChampSelect, Settings.RoleConfig roleConfig)
         {
+            // Champions we can no longer pick (locked by someone else or banned).
+            System.Collections.Generic.HashSet<int> unavailableForPick = GetUnavailableForPick(currentChampSelect, currentChampSelect.LocalPlayerCellId);
+
             // Check if the hover gets cleared (by either a ban or teammate taking it)
             if (championId == 0) pickedChamp = false;
+            // Or if the champion we were hovering just got taken/banned by someone else
+            // (e.g. the enemy team picked our champion) - re-select so we fall back to the backup.
+            else if (pickedChamp && unavailableForPick.Contains(championId)) pickedChamp = false;
 
             if (!pickedChamp && ShouldHoverChampion(currentChampSelect))
             {
@@ -501,8 +507,12 @@ namespace Leauge_Auto_Accept
                     int backupChampId = ParseId(roleConfig.backupChamp[1]);
                     int backupRunesId = ParseId(roleConfig.backupChampRunes[1]);
 
-                    // Try first choice (the role's main champion)
-                    if (primaryChampId > 0)
+                    // If our main champion is no longer available (the enemy or an ally already
+                    // picked it, or it got banned), skip straight to the backup champion.
+                    bool primaryTaken = primaryChampId > 0 && unavailableForPick.Contains(primaryChampId);
+
+                    // Try first choice (the role's main champion) unless it's already taken
+                    if (primaryChampId > 0 && !primaryTaken)
                     {
                         hoverChampion(actId, primaryChampId, "pick");
                         handleRunes(primaryRunesId);
@@ -664,6 +674,60 @@ namespace Leauge_Auto_Accept
                     {
                         set.Add(champId); // a teammate is hovering this ban
                     }
+                }
+            }
+
+            return set;
+        }
+
+        /// <summary>
+        /// Champions that can no longer be picked: banned champions plus champions already
+        /// locked by another player (unless the mode allows duplicate picks).
+        /// </summary>
+        private static System.Collections.Generic.HashSet<int> GetUnavailableForPick(LCUTypes.LolChampSelectSessionV1 session, int localCellId)
+        {
+            var set = new System.Collections.Generic.HashSet<int>();
+
+            // Banned champions (both teams) are never pickable.
+            if (session.Bans != null)
+            {
+                AddChampionIds(set, session.Bans.MyTeamBans);
+                AddChampionIds(set, session.Bans.TheirTeamBans);
+            }
+
+            // In modes that allow duplicates, another player's pick doesn't block ours.
+            if (session.AllowDuplicatePicks)
+            {
+                return set;
+            }
+
+            // Champions locked by someone else (enemy team, or an ally other than us).
+            if (session.MyTeam != null)
+            {
+                foreach (var m in session.MyTeam)
+                {
+                    if (m.CellId != localCellId && m.ChampionId > 0) set.Add(m.ChampionId);
+                }
+            }
+            if (session.TheirTeam != null)
+            {
+                foreach (var t in session.TheirTeam)
+                {
+                    if (t.ChampionId > 0) set.Add(t.ChampionId);
+                }
+            }
+
+            // Completed pick actions (reliable across both teams).
+            if (session.Actions != null)
+            {
+                foreach (var act in session.Actions.SelectMany(list => list.AsArray()))
+                {
+                    if (act == null) continue;
+                    if ((string)act["type"] != "pick") continue;
+                    bool completed = (bool?)act["completed"] ?? false;
+                    int actorCell = (int?)act["actorCellId"] ?? -1;
+                    int champId = (int?)act["championId"] ?? 0;
+                    if (completed && champId > 0 && actorCell != localCellId) set.Add(champId);
                 }
             }
 
