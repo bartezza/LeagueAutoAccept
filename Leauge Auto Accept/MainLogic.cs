@@ -613,7 +613,8 @@ namespace Leauge_Auto_Accept
         {
             System.Collections.Generic.HashSet<int> unavailable = GetUnavailableBanChampionIds(session, localCellId);
 
-            foreach (var slot in roleConfig.bans)
+            // Use this role's own ban list if it overrides, otherwise the shared global list.
+            foreach (var slot in Settings.EffectiveBans(roleConfig))
             {
                 string id = slot[1];
                 if (id == "0") continue;      // empty slot

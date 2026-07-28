@@ -268,6 +268,9 @@ namespace Leauge_Auto_Accept
                 case "roleMenu":
                     UI.rolesMenu();
                     break;
+                case "globalBansMenu":
+                    UI.rolesMenu();
+                    break;
                 case "champSelector":
                 case "spellSelector":
                 case "runeSelector":
@@ -284,6 +287,11 @@ namespace Leauge_Auto_Accept
                     {
                         UI.previousWindow = "";
                         UI.arenaMenu();
+                    }
+                    else if (UI.previousWindow == "globalBansMenu")
+                    {
+                        UI.previousWindow = "";
+                        UI.globalBansMenu();
                     }
                     else
                     {
@@ -332,6 +340,9 @@ namespace Leauge_Auto_Accept
                 case "roleMenu":
                     roleMenuNav();
                     break;
+                case "globalBansMenu":
+                    globalBansMenuNav();
+                    break;
                 case "arenaMenu":
                     arenaMenuNav();
                     if (UI.currentWindow == "arenaMenu")
@@ -379,6 +390,11 @@ namespace Leauge_Auto_Accept
                         {
                             UI.previousWindow = "";
                             UI.roleMenu();
+                        }
+                        else if (UI.previousWindow == "globalBansMenu")
+                        {
+                            UI.previousWindow = "";
+                            UI.globalBansMenu();
                         }
                         else
                         {
@@ -690,6 +706,24 @@ namespace Leauge_Auto_Accept
                 UI.currentRole = Settings.RoleKeys[currentPos];
                 UI.roleMenu();
             }
+            else if (currentPos == Settings.RoleKeys.Length)
+            {
+                // "Global bans" row (shared across all roles).
+                UI.currentRole = "";
+                UI.globalBansMenu();
+            }
+        }
+
+        private static void globalBansMenuNav()
+        {
+            if (currentPos >= 0 && currentPos < Settings.BanSlots)
+            {
+                UI.currentRole = "";
+                UI.currentChampPicker = 4;
+                UI.currentBanSlot = currentPos;
+                UI.previousWindow = "globalBansMenu";
+                UI.champSelector();
+            }
         }
 
         private static void roleMenuNav()
@@ -714,12 +748,21 @@ namespace Leauge_Auto_Accept
                     UI.currentChampPicker = 1;
                     UI.runeSelector();
                     break;
-                case 4: // Ban 1
-                case 5: // Ban 2
-                case 6: // Ban 3
-                    UI.currentChampPicker = 4;
-                    UI.currentBanSlot = currentPos - 4;
-                    UI.champSelector();
+                case 4: // Override global bans (toggle)
+                    Settings.toggleRoleOverrideBans(UI.currentRole);
+                    UI.roleMenu(currentPos); // re-render so the toggle + ban values update in place
+                    break;
+                case 5: // Ban 1
+                case 6: // Ban 2
+                case 7: // Ban 3
+                    // Ban slots are only editable when this role overrides the global list.
+                    // Otherwise they show the (read-only) global bans, edited from the Global bans menu.
+                    if (Settings.roles.ContainsKey(UI.currentRole) && Settings.roles[UI.currentRole].overrideBans)
+                    {
+                        UI.currentChampPicker = 4;
+                        UI.currentBanSlot = currentPos - 5;
+                        UI.champSelector();
+                    }
                     break;
             }
         }

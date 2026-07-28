@@ -250,7 +250,7 @@ namespace Leauge_Auto_Accept
             showCursor = false;
             topPad = SizeHandler.HeightCenter - 3;
             leftPad = SizeHandler.WidthCenter - 25;
-            maxPos = Settings.RoleKeys.Length;
+            maxPos = Settings.RoleKeys.Length + 1;
 
             Console.Clear();
 
@@ -262,23 +262,33 @@ namespace Leauge_Auto_Accept
                 Print.printCentered(addDotsInBetween(Settings.RoleDisplayNames[i], rc.champ[0]), topPad + i);
             }
 
+            // Shared global ban list (used by every role that doesn't override it).
+            int configuredGlobalBans = 0;
+            foreach (var b in Settings.globalBans)
+            {
+                if (b[1] != "0") configuredGlobalBans++;
+            }
+            Print.printCentered(
+                addDotsInBetween("Global bans", configuredGlobalBans + "/" + Settings.BanSlots + " set"),
+                topPad + Settings.RoleKeys.Length);
+
             Navigation.handlePointerMovementPrint();
 
             Print.canMovePos = true;
         }
 
-        public static void roleMenu()
+        public static void roleMenu(int startPos = 0)
         {
             Print.canMovePos = false;
-            Navigation.currentPos = 0;
-            Navigation.consolePosLast = 0;
+            Navigation.currentPos = startPos;
+            Navigation.consolePosLast = startPos;
 
             currentWindow = "roleMenu";
             windowType = "normal";
             showCursor = false;
             topPad = SizeHandler.HeightCenter - 4;
             leftPad = SizeHandler.WidthCenter - 25;
-            maxPos = 4 + Settings.BanSlots;
+            maxPos = 5 + Settings.BanSlots;
 
             Console.Clear();
 
@@ -288,6 +298,10 @@ namespace Leauge_Auto_Accept
                 ? Settings.roles[currentRole]
                 : new Settings.RoleConfig();
 
+            // Bans shown are the ones that actually apply: this role's own list when it overrides,
+            // otherwise the shared global list.
+            string[][] effectiveBans = Settings.EffectiveBans(rc);
+
             Print.printCentered(roleName + " setup", topPad - 2);
 
             string[] optionName = {
@@ -295,6 +309,7 @@ namespace Leauge_Auto_Accept
                 " Rune page",
                 "Backup champion",
                 " Rune page",
+                "Override global bans",
                 "Ban 1",
                 "Ban 2",
                 "Ban 3"
@@ -304,15 +319,51 @@ namespace Leauge_Auto_Accept
                 rc.champRunes[0],
                 rc.backupChamp[0],
                 rc.backupChampRunes[0],
-                rc.bans[0][0],
-                rc.bans[1][0],
-                rc.bans[2][0]
+                rc.overrideBans ? "Yes" : "No",
+                effectiveBans[0][0],
+                effectiveBans[1][0],
+                effectiveBans[2][0]
             };
 
             for (int i = 0; i < optionName.Length; i++)
             {
                 Print.printCentered(addDotsInBetween(optionName[i], optionValue[i]), topPad + i);
             }
+
+            Print.printCentered(
+                rc.overrideBans
+                    ? "Using this role's own ban list (overrides the global one)."
+                    : "Using the global ban list. Set 'Override global bans' to Yes to edit these.",
+                topPad + optionName.Length + 1);
+
+            Navigation.handlePointerMovementPrint();
+
+            Print.canMovePos = true;
+        }
+
+        public static void globalBansMenu(int startPos = 0)
+        {
+            Print.canMovePos = false;
+            Navigation.currentPos = startPos;
+            Navigation.consolePosLast = startPos;
+
+            currentWindow = "globalBansMenu";
+            windowType = "normal";
+            showCursor = false;
+            topPad = SizeHandler.HeightCenter - 3;
+            leftPad = SizeHandler.WidthCenter - 25;
+            maxPos = Settings.BanSlots;
+
+            Console.Clear();
+
+            Print.printCentered("Global bans", topPad - 2);
+
+            for (int i = 0; i < Settings.BanSlots; i++)
+            {
+                Print.printCentered(addDotsInBetween("Ban " + (i + 1), Settings.globalBans[i][0]), topPad + i);
+            }
+
+            Print.printCentered("Shared by every role that doesn't override its bans.", topPad + Settings.BanSlots + 1);
 
             Navigation.handlePointerMovementPrint();
 

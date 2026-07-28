@@ -20,8 +20,12 @@ namespace Leauge_Auto_Accept
             public string[] backupChamp = { "Unselected", "0" };
             public string[] backupChampRunes = { "Unselected", "0" };
 
-            // Ordered ban preferences. The app bans the first entry that isn't already
-            // banned or hovered/picked by a party member.
+            // When true, this role uses its own `bans` list below instead of the shared
+            // global ban list. When false (default) the global list is used for this role.
+            public bool overrideBans = false;
+
+            // Ordered ban preferences (this role's override list). The app bans the first entry
+            // that isn't already banned or hovered/picked by a party member.
             public string[][] bans =
             {
                 new[] { "Unselected", "0" },
@@ -29,6 +33,20 @@ namespace Leauge_Auto_Accept
                 new[] { "Unselected", "0" },
             };
         }
+
+        // Shared ban list used by every role that doesn't override it. Same shape/length
+        // (BanSlots) as RoleConfig.bans; tried in order during the ban phase.
+        public static string[][] globalBans =
+        {
+            new[] { "Unselected", "0" },
+            new[] { "Unselected", "0" },
+            new[] { "Unselected", "0" },
+        };
+
+        // The ban list that actually applies to a role: its own override list when enabled,
+        // otherwise the shared global list.
+        public static string[][] EffectiveBans(RoleConfig role) =>
+            role.overrideBans ? role.bans : globalBans;
 
         // Order is also the display order (Top, Jungle, Mid, Bottom, Support).
         public static readonly string[] RoleKeys = { "top", "jungle", "middle", "bottom", "utility" };
@@ -47,7 +65,8 @@ namespace Leauge_Auto_Accept
             roles.Values.Any(r => r.champ[1] != "0" || r.backupChamp[1] != "0");
 
         public static bool AnyRoleBanConfigured() =>
-            roles.Values.Any(r => r.bans.Any(b => b[1] != "0"));
+            globalBans.Any(b => b[1] != "0") ||
+            roles.Values.Any(r => r.overrideBans && r.bans.Any(b => b[1] != "0"));
 
         public static int ConfiguredRoleCount() =>
             roles.Values.Count(r => r.champ[1] != "0");
@@ -67,7 +86,7 @@ namespace Leauge_Auto_Accept
         public static bool preloadData = false;
         public static bool instaLock = false;
         public static bool instaBan = false;
-        public static bool disableUpdateCheck = false;
+        public static bool disableUpdateCheck = true;  // Disabled by default in the enhanced edition for now
         public static bool autoPickOrderTrade = false;
         public static bool instantHover = false;
         public static bool shouldAutoAcceptbeOn = false;
@@ -301,6 +320,15 @@ namespace Leauge_Auto_Accept
                             break;
                     }
                 }
+                else if (UI.currentChampPicker == 4)
+                {
+                    // Shared global ban slot (not tied to a role).
+                    if (UI.currentBanSlot >= 0 && UI.currentBanSlot < BanSlots)
+                    {
+                        globalBans[UI.currentBanSlot][0] = name;
+                        globalBans[UI.currentBanSlot][1] = id;
+                    }
+                }
                 else
                 {
                     // Arena crowd-favourite slots (not tied to a role).
@@ -511,7 +539,8 @@ namespace Leauge_Auto_Accept
                     .Append(p).Append("backupName:").Append(rc.backupChamp[0]).Append(',')
                     .Append(p).Append("backupId:").Append(rc.backupChamp[1]).Append(',')
                     .Append(p).Append("backupRuneName:").Append(rc.backupChampRunes[0]).Append(',')
-                    .Append(p).Append("backupRuneId:").Append(rc.backupChampRunes[1]).Append(',');
+                    .Append(p).Append("backupRuneId:").Append(rc.backupChampRunes[1]).Append(',')
+                    .Append(p).Append("overrideBans:").Append(rc.overrideBans).Append(',');
                 for (int b = 0; b < BanSlots; b++)
                 {
                     int n = b + 1;
@@ -519,6 +548,15 @@ namespace Leauge_Auto_Accept
                         .Append(p).Append("ban").Append(n).Append("Name:").Append(rc.bans[b][0]).Append(',')
                         .Append(p).Append("ban").Append(n).Append("Id:").Append(rc.bans[b][1]).Append(',');
                 }
+            }
+
+            // Shared global ban list.
+            for (int b = 0; b < BanSlots; b++)
+            {
+                int n = b + 1;
+                configBuilder
+                    .Append("globalBan").Append(n).Append("Name:").Append(globalBans[b][0]).Append(',')
+                    .Append("globalBan").Append(n).Append("Id:").Append(globalBans[b][1]).Append(',');
             }
 
             configBuilder.Append(
@@ -575,6 +613,19 @@ namespace Leauge_Auto_Accept
             }
         }
 
+        public static void toggleRoleOverrideBans(string roleKey)
+        {
+            if (string.IsNullOrEmpty(roleKey) || !roles.ContainsKey(roleKey))
+            {
+                return;
+            }
+            roles[roleKey].overrideBans = !roles[roleKey].overrideBans;
+            if (saveSettings)
+            {
+                settingsSave();
+            }
+        }
+
         public static void toggleBanCrowdFavouriteSetting()
         {
             banCrowdFavourite = !banCrowdFavourite;
@@ -608,6 +659,10 @@ namespace Leauge_Auto_Accept
             File.Delete(dirParameter);
         }
 
+        // Roles that had an explicit overrideBans entry in the loaded config. Used to migrate
+        // older configs (which stored bans per role with no global list) without clobbering them.
+        private static readonly HashSet<string> rolesWithExplicitOverride = new HashSet<string>();
+
         private static void applyRoleSetting(string key, string value)
         {
             // key format: role_<roleKey>_<field>. Role keys and field names contain no underscores.
@@ -621,6 +676,10 @@ namespace Leauge_Auto_Accept
             RoleConfig rc = roles[roleKey];
             switch (field)
             {
+                case "overrideBans":
+                    rc.overrideBans = Boolean.TryParse(value, out bool ov) && ov;
+                    rolesWithExplicitOverride.Add(roleKey);
+                    break;
                 case "champName": rc.champ[0] = value; break;
                 case "champId": rc.champ[1] = value; break;
                 case "champRuneName": rc.champRunes[0] = value; break;
@@ -647,6 +706,7 @@ namespace Leauge_Auto_Accept
             string dirParameter = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) + @"\Leauge Auto Accept Config.txt";
             if (File.Exists(dirParameter))
             {
+                rolesWithExplicitOverride.Clear();
                 string text = File.ReadAllText(dirParameter);
                 string[] commas = text.Split(',');
                 foreach (var comma in commas)
@@ -663,6 +723,12 @@ namespace Leauge_Auto_Accept
 
                     switch (columns[0])
                     {
+                        case "globalBan1Name": globalBans[0][0] = columns[1]; break;
+                        case "globalBan1Id": globalBans[0][1] = columns[1]; break;
+                        case "globalBan2Name": globalBans[1][0] = columns[1]; break;
+                        case "globalBan2Id": globalBans[1][1] = columns[1]; break;
+                        case "globalBan3Name": globalBans[2][0] = columns[1]; break;
+                        case "globalBan3Id": globalBans[2][1] = columns[1]; break;
                         case "arenaBravery":
                             bravery = Boolean.Parse(columns[1]);
                             break;
@@ -768,6 +834,17 @@ namespace Leauge_Auto_Accept
                             break;
                     }
                     saveSettings = true;
+                }
+
+                // Backward compatibility: configs written before the global ban list existed stored
+                // bans per role. If such a role has bans but no explicit override flag, keep its old
+                // behaviour by treating its bans as an override of the (empty) global list.
+                foreach (var key in RoleKeys)
+                {
+                    if (!rolesWithExplicitOverride.Contains(key) && roles[key].bans.Any(b => b[1] != "0"))
+                    {
+                        roles[key].overrideBans = true;
+                    }
                 }
             }
         }
