@@ -33,6 +33,10 @@ namespace Leauge_Auto_Accept
         private static long champSelectStart;
         private static string lastChatRoom = "";
 
+        // Approximate time between champ-select polls (main loop sleep + request latency).
+        // Used as a safety margin so the end-of-turn lock window can't fall between two checks.
+        private const int ChampSelectPollIntervalMs = 1000;
+
         private static long queueStartTime;
         private static string lastPhase = "";
 
@@ -801,14 +805,30 @@ namespace Leauge_Auto_Accept
 
         private static void checkLockDelay(int actId, int championId, LCUTypes.LolChampSelectSessionV1 currentChampSelect, string actType)
         {
-            long totalTime = currentChampSelect.Timer.TotalTimeInPhase;
-            long remaining = currentChampSelect.Timer.AdjustedTimeLeftInPhase;
+            var timer = currentChampSelect.Timer;
+            long totalTime = timer.TotalTimeInPhase;
+
+            // adjustedTimeLeftInPhase is a snapshot taken at internalNowInEpochMs; it does NOT tick
+            // down between our polls. Without correcting it against the real clock it stays close to
+            // the full turn time and (almost) never drops below endDelay, so we never lock and the
+            // turn runs out. Subtract the time elapsed since the snapshot to get the real time left.
+            long remaining = timer.AdjustedTimeLeftInPhase;
+            if (timer.InternalNowInEpochMs > 0)
+            {
+                long now = DateTimeOffset.Now.ToUnixTimeMilliseconds();
+                remaining -= now - timer.InternalNowInEpochMs;
+            }
             long elapsed = totalTime - remaining;
 
             int startDelay = actType == "pick" ? Settings.pickStartlockDelay : Settings.banStartlockDelay;
             int endDelay = actType == "pick" ? Settings.pickEndlockDelay : Settings.banEndlockDelay;
 
-            if (remaining <= endDelay || elapsed >= startDelay)
+            // We only poll champ select about once a second, so the "lock endDelay ms before the
+            // turn ends" window can be narrower than the gap between two checks and get skipped
+            // entirely. Lock one poll interval early so the window can't fall between two checks.
+            long endLockGuard = (long)endDelay + ChampSelectPollIntervalMs;
+
+            if (remaining <= endLockGuard || elapsed >= startDelay)
             {
                 lockChampion(actId, championId, actType);
             }
