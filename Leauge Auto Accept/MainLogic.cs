@@ -722,17 +722,32 @@ namespace Leauge_Auto_Accept
                 }
             }
 
-            // Completed pick actions (reliable across both teams).
+            // Completed actions are the authoritative, immediate source:
+            //  - completed bans (either team) make the champion unpickable. session.Bans is
+            //    frequently empty/late mid-draft, so the ban actions are what actually let us
+            //    detect that our hovered champion got banned and fall back to the backup.
+            //  - completed picks by another player block that champion for us.
             if (session.Actions != null)
             {
                 foreach (var act in session.Actions.SelectMany(list => list.AsArray()))
                 {
                     if (act == null) continue;
-                    if ((string)act["type"] != "pick") continue;
                     bool completed = (bool?)act["completed"] ?? false;
-                    int actorCell = (int?)act["actorCellId"] ?? -1;
+                    if (!completed) continue;
+
                     int champId = (int?)act["championId"] ?? 0;
-                    if (completed && champId > 0 && actorCell != localCellId) set.Add(champId);
+                    if (champId <= 0) continue;
+
+                    string type = (string)act["type"];
+                    if (type == "ban")
+                    {
+                        set.Add(champId);
+                    }
+                    else if (type == "pick")
+                    {
+                        int actorCell = (int?)act["actorCellId"] ?? -1;
+                        if (actorCell != localCellId) set.Add(champId);
+                    }
                 }
             }
 
