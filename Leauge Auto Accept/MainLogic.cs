@@ -857,36 +857,27 @@ namespace Leauge_Auto_Accept
                 return;
             }
 
-            // Get ongoing swap data
-            var swapResp = LCU.clientRequest("GET", "lol-champ-select/v1/ongoing-swap");
-            if (swapResp.IsSuccessStatusCode)
+            // The authoritative list of pending swaps lives in the champ-select session under
+            // "pickOrderSwaps". Each entry is a swap between us and one teammate, with a "state".
+            // A swap another player offered us has state "RECEIVED"; one we offered has "SENT".
+            var sessionResp = LCU.clientRequest<LCUTypes.LolChampSelectSessionV1>("GET", "lol-champ-select/v1/session");
+            if (!sessionResp.IsSuccessStatusCode || sessionResp.Data?.PickOrderSwaps == null)
             {
-                JsonNode swap;
-                try
+                return;
+            }
+
+            foreach (var swap in sessionResp.Data.PickOrderSwaps)
+            {
+                Log.Debug("Pick order swap id={0} cellId={1} state={2}", swap.Id, swap.CellId, swap.State);
+
+                // Only accept incoming requests; ignore our own offers and terminal states.
+                if (swap.State != "RECEIVED")
                 {
-                    swap = JsonNode.Parse(swapResp.Content);
-                }
-                catch (JsonException ex)
-                {
-                    Log.Debug(ex, "Failed to parse ongoing swap response.");
-                    return;
+                    continue;
                 }
 
-                // If the swap was called by local player, return
-                if ((bool?)swap?["initiatedByLocalPlayer"] == true)
-                {
-                    return;
-                }
-                // Get action ID
-                int? swapId = (int?)swap?["id"];
-                if (swapId == null)
-                {
-                    return;
-                }
-
-                // Swap pick order
-                LCU.clientRequest("POST", "lol-champ-select/v1/session/swaps/" + swapId + "/accept");
-                LCU.clientRequest("POST", "lol-champ-select/v1/ongoing-swap/" + swapId + "/clear");
+                Log.Info("Accepting pick order swap id={0} cellId={1}", swap.Id, swap.CellId);
+                LCU.clientRequest("POST", $"lol-champ-select/v1/session/pick-order-swaps/{swap.Id}/accept");
             }
         }
 
