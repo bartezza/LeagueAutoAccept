@@ -19,7 +19,13 @@ namespace Leauge_Auto_Accept
         public static void initialize()
         {
             Version appVersionTmp = Assembly.GetExecutingAssembly().GetName().Version;
+            // MAJOR.MINOR, plus the patch component when it's non-zero (e.g. 3.7, 3.7.1, 3.7.2).
+            // Keeping patch 0 as "3.7" stays backward-compatible with existing "v3.7" release tags.
             appVersion = appVersionTmp.Major + "." + appVersionTmp.Minor;
+            if (appVersionTmp.Build > 0)
+            {
+                appVersion += "." + appVersionTmp.Build;
+            }
             
             if (!Debugger.IsAttached)
             {
