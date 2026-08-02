@@ -197,6 +197,9 @@ namespace Leauge_Auto_Accept
             // Edition note below the title
             Print.printCentered("~ Enhanced edition ~", SizeHandler.HeightCenter - 4);
 
+            // Full app version, shown below the edition note
+            Print.printCentered("v" + Updater.appVersion, SizeHandler.HeightCenter - 3);
+
             // Define options
             string[] optionName = {
                 "Champions per role",
@@ -226,8 +229,6 @@ namespace Leauge_Auto_Accept
             Print.printWhenPossible("  Info", SizeHandler.HeightCenter + numOptions, leftPad + 41);
             Print.printWhenPossible("  Arena", SizeHandler.HeightCenter + numOptions, leftPad + 20);
             Print.printWhenPossible("  Settings", SizeHandler.HeightCenter + numOptions, leftPad + 1);
-
-            Print.printWhenPossible("v" + Updater.appVersion, SizeHandler.WindowHeight - 1, 0, false);
 
             Navigation.handlePointerMovementPrint();
 
