@@ -3,10 +3,18 @@ Ever wanted to go pee or grab something but you're already 10 minutes into the q
 
 ## Enhanced edition (by bartezza)
 This fork adds a few improvements on top of the original:
-- **Per-role setup** – configure a champion and backup champion for each role (Top/Jungle/Mid/Bottom/Support); the one matching your assigned position is used.
+
+**Added:**
+- **Per-role setup** – configure a champion, backup champion and ban for each role (Top/Jungle/Mid/Bottom/Support); the one matching your assigned position is used.
 - **Global ban list (3 slots)** – one shared ban list used by every role, so you only set your bans once. It bans the first champion still available, skipping any already banned or picked/hovered by a teammate.
-- **Per-role ban overrides** – any role can flip on *Override global bans* to use its own 3-slot list instead of the global one, for roles that need different bans.
+- **Per-role ban overrides** – any role can flip on *Override global bans* to use its own 3-slot list instead of the global one.
 - **Smarter backup pick** – if your champion gets taken (e.g. the enemy picks it), it falls back to your backup automatically.
+- **Granular versioning** – full `MAJOR.MINOR.PATCH` version, shown on the main screen.
+
+**Fixed:**
+- **Backup pick on ban** – the backup champion is now selected when your pick is banned, not just when it's taken.
+- **Pick order swaps** – teammate pick-order swap requests are now auto-accepted (previously ignored due to a wrong LCU endpoint).
+- **On-time locking** – pick/ban now reliably locks near the end of the turn instead of occasionally missing the lock window.
 - **More reliable client detection** – no longer gets stuck when the client's auth data isn't ready yet.
 
 ## Screenshot
