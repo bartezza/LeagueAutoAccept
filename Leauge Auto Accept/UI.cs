@@ -230,6 +230,8 @@ namespace Leauge_Auto_Accept
             Print.printWhenPossible("  Arena", SizeHandler.HeightCenter + numOptions, leftPad + 20);
             Print.printWhenPossible("  Settings", SizeHandler.HeightCenter + numOptions, leftPad + 1);
 
+            Print.printWhenPossible("v" + Updater.appVersion, SizeHandler.WindowHeight - 1, 0, false);
+
             Navigation.handlePointerMovementPrint();
 
             Print.canMovePos = true;
