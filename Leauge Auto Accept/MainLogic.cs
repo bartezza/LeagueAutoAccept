@@ -18,6 +18,7 @@ namespace Leauge_Auto_Accept
         private static bool lockedChamp = false;
         private static bool pickedBan = false;
         private static bool lockedBan = false;
+        private static int banHoverId = 0; // last champion we hovered as ban, to detect a manual override
         private static bool pickedSpell1 = false;
         private static bool pickedSpell2 = false;
         private static bool sentChatMessages = false;
@@ -191,6 +192,7 @@ namespace Leauge_Auto_Accept
                     lockedChamp = false;
                     pickedBan = false;
                     lockedBan = false;
+                    banHoverId = 0;
                     pickedSpell1 = false;
                     pickedSpell2 = false;
                     sentChatMessages = false;
@@ -569,34 +571,42 @@ namespace Leauge_Auto_Accept
             // make sure it's my turn to pick and that it is not the planning phase anymore
             if (ActIsInProgress == true && champSelectPhase != "PLANNING")
             {
-                // Pick the first configured ban that isn't already banned or pre-selected by a
-                // party member. Re-evaluated every pass so we adapt if our current hover becomes
-                // unavailable (e.g. someone bans it or a teammate hovers it).
-                string chosenBanIdStr = ChooseBanId(currentChampSelect, roleConfig, currentChampSelect.LocalPlayerCellId);
-                bool dontBanCrowd = isArena && Settings.banCrowdFavourite && isInCrowdFavoriteChamps(chosenBanIdStr);
-                int chosenBanId = ParseId(dontBanCrowd ? "0" : chosenBanIdStr);
+                // A champion we didn't hover means the user selected the ban manually:
+                // keep (and lock) their choice instead of re-hovering ours.
+                bool manualBan = championId > 0 && championId != banHoverId;
+                int banId = championId;
 
-                // Hover the chosen ban (skip if we're already hovering exactly that champion).
-                if (!pickedBan || championId != chosenBanId)
+                if (!manualBan)
                 {
-                    long currentTime = DateTimeOffset.Now.ToUnixTimeMilliseconds();
+                    // Pick the first configured ban that isn't already banned or pre-selected by a
+                    // party member. Re-evaluated every pass so we adapt if our current hover becomes
+                    // unavailable (e.g. someone bans it or a teammate hovers it).
+                    string chosenBanIdStr = ChooseBanId(currentChampSelect, roleConfig, currentChampSelect.LocalPlayerCellId);
+                    bool dontBanCrowd = isArena && Settings.banCrowdFavourite && isInCrowdFavoriteChamps(chosenBanIdStr);
+                    banId = ParseId(dontBanCrowd ? "0" : chosenBanIdStr);
 
-                    if (currentTime - Settings.banStartHoverDelay > champSelectStart) // Check if enough time has passed since planning phase has started
+                    // Hover the chosen ban (skip if we're already hovering exactly that champion).
+                    if (championId != banId)
                     {
-                        hoverChampion(actId, chosenBanId, "ban");
+                        long currentTime = DateTimeOffset.Now.ToUnixTimeMilliseconds();
+
+                        if (currentTime - Settings.banStartHoverDelay > champSelectStart) // Check if enough time has passed since planning phase has started
+                        {
+                            hoverChampion(actId, banId, "ban");
+                        }
                     }
                 }
 
                 if (!lockedBan)
                 {
-                    // lockChampion sends the championId, so we always lock the chosen ban.
+                    // lockChampion sends the championId, so we lock exactly the chosen/manual ban.
                     if (!Settings.instaBan)
                     {
-                        checkLockDelay(actId, chosenBanId, currentChampSelect, "ban");
+                        checkLockDelay(actId, banId, currentChampSelect, "ban");
                     }
                     else
                     {
-                        lockChampion(actId, chosenBanId, "ban");
+                        lockChampion(actId, banId, "ban");
                     }
                 }
 
@@ -786,6 +796,7 @@ namespace Leauge_Auto_Accept
                 else if (actType == "ban")
                 {
                     pickedBan = true;
+                    banHoverId = currentChampId;
                 }
             }
         }

@@ -14,6 +14,7 @@ This fork adds a few improvements on top of the original:
 **Fixed:**
 - **Backup pick on ban** – the backup champion is now selected when your pick is banned, not just when it's taken.
 - **Pick order swaps** – teammate pick-order swap requests are now auto-accepted (previously ignored due to a wrong LCU endpoint).
+- **Manual ban override** – selecting a different ban yourself is now kept (and locked) instead of being instantly replaced by the configured ban.
 - **On-time locking** – pick/ban now reliably locks near the end of the turn instead of occasionally missing the lock window.
 - **More reliable client detection** – no longer gets stuck when the client's auth data isn't ready yet.
 
